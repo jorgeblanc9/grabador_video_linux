@@ -47,7 +47,7 @@ class Config:
             'audio_channels': 2,
             'enable_system_audio': False,
             'enable_microphone': False,
-            'output_directory': '.',
+            'output_directory': 'captures',
             'last_audio_device': None,
             'last_region': None
         }

@@ -112,6 +112,20 @@ def main(argv: List[str] = None):
     output_file = args.output
     if not output_file:
         output_file = generate_output_filename(extension=args.format)
+    else:
+        # Normalizar ruta para que siempre esté en captures
+        captures_dir = Path("captures")
+        captures_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = Path(output_file)
+        # Si es una ruta absoluta fuera de captures, extraer solo el nombre
+        if file_path.is_absolute() and str(captures_dir.absolute()) not in str(file_path.absolute()):
+            output_file = str(captures_dir / file_path.name)
+            logger.debug(f"Ruta normalizada a: {output_file}")
+        # Si es una ruta relativa, asegurar que esté en captures
+        elif not file_path.is_absolute():
+            output_file = str(captures_dir / file_path.name)
+            logger.debug(f"Ruta normalizada a: {output_file}")
     
     # Validar ruta de salida
     if not validate_output_path(output_file):

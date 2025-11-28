@@ -14,7 +14,7 @@ def generate_output_filename(prefix: str = "grabacion",
     Args:
         prefix: Prefijo del nombre.
         extension: Extensión del archivo.
-        directory: Directorio de salida (opcional).
+        directory: Directorio de salida (opcional). Si es None, usa 'captures' por defecto.
         
     Returns:
         Ruta completa del archivo.
@@ -22,12 +22,13 @@ def generate_output_filename(prefix: str = "grabacion",
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"{prefix}_{timestamp}.{extension}"
     
-    if directory:
-        output_dir = Path(directory)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        return str(output_dir / filename)
+    # Usar 'captures' como directorio por defecto si no se especifica uno
+    if directory is None:
+        directory = "captures"
     
-    return filename
+    output_dir = Path(directory)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return str(output_dir / filename)
 
 
 def ensure_directory(path: str) -> Path:

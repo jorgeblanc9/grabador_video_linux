@@ -730,12 +730,28 @@ class MainWindow:
     def _browse_output_file(self):
         """Abrir diálogo para seleccionar archivo de salida."""
         format_ext = self.output_format.get().lower()
+        # Asegurar que la carpeta captures existe
+        captures_dir = Path("captures")
+        captures_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Obtener el nombre del archivo actual si existe
+        initialfile = self.output_file.get()
+        if initialfile:
+            # Si es una ruta completa, extraer solo el nombre del archivo
+            initialfile = Path(initialfile).name
+        
         filename = filedialog.asksaveasfilename(
             defaultextension=f".{format_ext}",
             filetypes=[(f"Archivo {format_ext.upper()}", f"*.{format_ext}")],
-            initialfile=self.output_file.get(),
+            initialdir=str(captures_dir.absolute()),
+            initialfile=initialfile,
         )
         if filename:
+            # Asegurar que el archivo se guarde en captures
+            file_path = Path(filename)
+            if not file_path.is_absolute() or str(captures_dir.absolute()) not in str(file_path.absolute()):
+                # Extraer solo el nombre del archivo y colocarlo en captures
+                filename = str(captures_dir / file_path.name)
             self.output_file.set(filename)
 
     def _start_recording(self):
@@ -747,7 +763,20 @@ class MainWindow:
                 messagebox.showerror("Error", "Debe especificar un archivo de salida")
                 return
 
-            if not validate_output_path(self.output_file.get()):
+            # Asegurar que el archivo se guarde en la carpeta captures
+            output_path = self.output_file.get()
+            captures_dir = Path("captures")
+            captures_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Normalizar la ruta para que siempre esté en captures
+            file_path = Path(output_path)
+            if not str(captures_dir.absolute()) in str(file_path.absolute()):
+                # Extraer solo el nombre del archivo y colocarlo en captures
+                output_path = str(captures_dir / file_path.name)
+                self.output_file.set(output_path)
+                self.logger.debug(f"Ruta normalizada a: {output_path}")
+
+            if not validate_output_path(output_path):
                 messagebox.showerror(
                     "Error",
                     "La ruta de salida no es válida o no tiene permisos de escritura",
@@ -853,7 +882,7 @@ class MainWindow:
             try:
                 self.recorder.start_recording(
                     duration=total_seconds,
-                    output_path=self.output_file.get(),
+                    output_path=output_path,
                     format=self.output_format.get().lower(),
                     quality=self.quality.get(),
                     enable_audio=enable_audio,
