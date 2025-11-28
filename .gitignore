@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Entorno virtual
+venv/
+env/
+ENV/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Archivos de prueba
+*.mp4
+*.avi
+*.mov
+*.mkv
+test_*.mp4
+grabacion_*.mp4
+
+# Logs
+*.log
+logs/
+
+# Configuración local
+.env
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+build/
+dist/
+*.egg-info/
+
