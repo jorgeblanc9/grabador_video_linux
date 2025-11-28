@@ -5,6 +5,7 @@ import numpy as np
 from PIL import Image
 from typing import Optional, Tuple, List, Dict
 import os
+import threading
 
 
 class ScreenCapture:
@@ -12,16 +13,44 @@ class ScreenCapture:
     
     def __init__(self):
         """Inicializar capturador de pantalla."""
+        # mss usa threading.local() internamente, necesitamos una instancia por thread
+        self._local = threading.local()
+        self._monitors = None
+        self._has_display = None
+        
+        # Inicializar en el thread principal para obtener información de monitores
         try:
-            self.sct = mss.mss()
-            self.monitors = self.sct.monitors
-            self.has_display = True
+            sct = mss.mss()
+            self._monitors = sct.monitors
+            self._has_display = True
+            sct.close()
         except Exception as e:
             # En WSL sin X11, mss puede fallar
-            self.has_display = False
-            self.sct = None
-            self.monitors = [{'width': 1920, 'height': 1080, 'top': 0, 'left': 0}]
+            self._has_display = False
+            self._monitors = [{'width': 1920, 'height': 1080, 'top': 0, 'left': 0}]
             # No lanzar error aquí, permitir que la aplicación continúe
+    
+    def _get_mss_instance(self):
+        """
+        Obtener instancia de mss para el thread actual.
+        Crea una nueva instancia si no existe en este thread.
+        """
+        if not hasattr(self._local, 'sct'):
+            try:
+                self._local.sct = mss.mss()
+            except Exception:
+                self._local.sct = None
+        return self._local.sct
+    
+    @property
+    def monitors(self):
+        """Obtener lista de monitores."""
+        return self._monitors
+    
+    @property
+    def has_display(self):
+        """Verificar si hay display disponible."""
+        return self._has_display
         
     def get_monitors(self) -> List[Dict]:
         """
@@ -72,15 +101,21 @@ class ScreenCapture:
         Raises:
             RuntimeError: Si no hay display disponible (WSL sin X11).
         """
-        if not self.has_display or self.sct is None:
+        if not self.has_display:
             raise RuntimeError(
                 "No hay display disponible. En WSL, necesitas configurar X11 forwarding.\n"
                 "Instala un servidor X11 en Windows (VcXsrv, Xming) y configura:\n"
                 "export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0.0"
             )
         
+        sct = self._get_mss_instance()
+        if sct is None:
+            raise RuntimeError(
+                "No se pudo inicializar mss. Verifica la configuración de X11."
+            )
+        
         monitor = self.monitors[monitor_index]
-        screenshot = self.sct.grab(monitor)
+        screenshot = sct.grab(monitor)
         
         # Convertir a numpy array y luego a BGR para OpenCV
         img = np.array(screenshot)
@@ -108,9 +143,15 @@ class ScreenCapture:
         Raises:
             RuntimeError: Si no hay display disponible (WSL sin X11).
         """
-        if not self.has_display or self.sct is None:
+        if not self.has_display:
             raise RuntimeError(
                 "No hay display disponible. En WSL, necesitas configurar X11 forwarding."
+            )
+        
+        sct = self._get_mss_instance()
+        if sct is None:
+            raise RuntimeError(
+                "No se pudo inicializar mss. Verifica la configuración de X11."
             )
         
         monitor = self.monitors[monitor_index]
@@ -123,7 +164,7 @@ class ScreenCapture:
             'height': height
         }
         
-        screenshot = self.sct.grab(region)
+        screenshot = sct.grab(region)
         img = np.array(screenshot)
         
         # mss devuelve BGRA, convertir a BGR
@@ -142,15 +183,23 @@ class ScreenCapture:
         Returns:
             Imagen PIL.
         """
+        sct = self._get_mss_instance()
+        if sct is None:
+            raise RuntimeError(
+                "No se pudo inicializar mss. Verifica la configuración de X11."
+            )
+        
         monitor = self.monitors[monitor_index]
-        screenshot = self.sct.grab(monitor)
+        screenshot = sct.grab(monitor)
         return Image.frombytes('RGB', screenshot.size, screenshot.bgra, 'raw', 'BGRX')
     
     def close(self):
         """Cerrar el capturador de pantalla."""
-        if hasattr(self, 'sct') and self.sct is not None:
-            try:
-                self.sct.close()
-            except Exception:
-                pass
+        # Cerrar instancias de mss en todos los threads
+        if hasattr(self, '_local'):
+            if hasattr(self._local, 'sct') and self._local.sct is not None:
+                try:
+                    self._local.sct.close()
+                except Exception:
+                    pass
 

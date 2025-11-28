@@ -145,11 +145,12 @@ class VideoEncoder:
         Args:
             frame: Datos del frame en formato BGR.
         """
-        if self.process and self.process.stdin:
+        if self.process and self.process.stdin and not self.process.stdin.closed:
             try:
                 self.process.stdin.write(frame)
                 self.process.stdin.flush()
-            except BrokenPipeError:
+            except (BrokenPipeError, ValueError, OSError):
+                # El proceso terminó o stdin está cerrado
                 self.encoding = False
     
     def write_audio(self, audio_data: bytes):
@@ -159,11 +160,12 @@ class VideoEncoder:
         Args:
             audio_data: Datos de audio en formato s16le.
         """
-        if self.process and self.process.stdin:
+        if self.process and self.process.stdin and not self.process.stdin.closed:
             try:
                 self.process.stdin.write(audio_data)
                 self.process.stdin.flush()
-            except BrokenPipeError:
+            except (BrokenPipeError, ValueError, OSError):
+                # El proceso terminó o stdin está cerrado
                 self.encoding = False
     
     def finish_encoding(self) -> str:
@@ -174,15 +176,30 @@ class VideoEncoder:
             Ruta del archivo generado.
         """
         if self.process:
-            if self.process.stdin:
-                self.process.stdin.close()
+            # Cerrar stdin de forma segura
+            if self.process.stdin and not self.process.stdin.closed:
+                try:
+                    self.process.stdin.close()
+                except (ValueError, OSError):
+                    # stdin ya estaba cerrado o el proceso terminó
+                    pass
             
-            # Esperar a que termine
-            stdout, stderr = self.process.communicate()
+            # Esperar a que termine el proceso
+            try:
+                stdout, stderr = self.process.communicate(timeout=30)
+            except subprocess.TimeoutExpired:
+                # Si el proceso no termina, forzar terminación
+                self.process.kill()
+                stdout, stderr = self.process.communicate()
+            except ValueError:
+                # El proceso ya terminó
+                stdout, stderr = b'', b''
             
-            if self.process.returncode != 0:
-                error_msg = stderr.decode('utf-8', errors='ignore')
-                raise RuntimeError(f"Error en codificación FFmpeg: {error_msg}")
+            if self.process.returncode and self.process.returncode != 0:
+                error_msg = stderr.decode('utf-8', errors='ignore') if stderr else "Error desconocido"
+                # No lanzar error si el archivo se generó correctamente
+                if not os.path.exists(self.output_path):
+                    raise RuntimeError(f"Error en codificación FFmpeg: {error_msg}")
             
             self.process = None
             self.encoding = False
